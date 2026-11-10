@@ -130,9 +130,15 @@ export async function POST(req: NextRequest) {
       nextStep: '/onboarding',
     }, { status: 201 });
 
+    const isHttps = Boolean(
+      process.env.VERCEL ||
+      process.env.VERCEL_ENV ||
+      req.headers.get('x-forwarded-proto') === 'https'
+    );
+
     response.cookies.set('skillswap_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',

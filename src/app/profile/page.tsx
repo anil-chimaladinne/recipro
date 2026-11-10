@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useAuth, UserProfile } from '@/context/AuthContext';
+import { useAuth, UserProfile, getAuthHeaders } from '@/context/AuthContext';
 import { 
   Sparkles, 
   Plus, 
@@ -124,7 +124,7 @@ function ProfileContent() {
   const fetchAvailability = async () => {
     if (!user) return;
     try {
-      const res = await fetch('/api/availability');
+      const res = await fetch('/api/availability', { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setAvailSlots(data.slots || []);
@@ -280,7 +280,9 @@ function ProfileContent() {
     const proficiency = skill.proficiency || 'Intermediate';
 
     try {
-      const res = await fetch(`/api/skill-assessments?skillName=${encodeURIComponent(skillName)}&proficiency=${encodeURIComponent(proficiency)}`);
+      const res = await fetch(`/api/skill-assessments?skillName=${encodeURIComponent(skillName)}&proficiency=${encodeURIComponent(proficiency)}`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setAssessmentQuestions(data.questions || []);
@@ -306,7 +308,7 @@ function ProfileContent() {
 
       const res = await fetch('/api/skill-assessments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           skillId: assessmentSkill.skill_id || assessmentSkill.id,
           targetLevel: assessmentSkill.proficiency || 'Intermediate',

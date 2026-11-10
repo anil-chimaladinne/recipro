@@ -57,13 +57,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('skillswap_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/auth/me', { headers });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -89,6 +96,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
+        const data = await res.json();
+        if (data.token && typeof window !== 'undefined') {
+          localStorage.setItem('skillswap_token', data.token);
+        }
         await refreshUser();
         return true;
       }
@@ -99,7 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('skillswap_token');
+    }
+    await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
     setUser(null);
   };
 

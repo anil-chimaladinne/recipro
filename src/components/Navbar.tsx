@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, getAuthHeaders } from '@/context/AuthContext';
 import { 
   Sparkles, 
   Search, 
@@ -34,7 +34,7 @@ export function Navbar() {
 
     const fetchUnread = async () => {
       try {
-        const res = await fetch('/api/notifications/unread-count');
+        const res = await fetch('/api/notifications/unread-count', { headers: getAuthHeaders() });
         if (res.status === 401) {
           // Token is unauthorized or expired - stop polling!
           if (interval) clearInterval(interval);
