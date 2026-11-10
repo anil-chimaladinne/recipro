@@ -44,30 +44,42 @@ export async function GET(req: NextRequest) {
     // Check if Mode C cycle discovery is also requested
     let cycles: any[] = [];
     if (mode === 'MODE_C' || mode === 'ALL') {
-      cycles = discoverExchangeCycles(authUser?.userId);
+      try {
+        cycles = discoverExchangeCycles(authUser?.userId);
+      } catch (cycleErr) {
+        console.warn('Cycle discovery error:', cycleErr);
+      }
     }
+
+    const knownPerson = matchResults?.knownPersonMatches || [];
+    const skillMatches = matchResults?.skillMatches || [];
+    const insideCollege = matchResults?.insideCollegeMatches || [];
+    const outsideCollege = matchResults?.outsideCollegeMatches || [];
 
     return NextResponse.json({
       success: true,
       query: q,
       mode,
       results: {
-        modeA_knownPerson: matchResults.knownPersonMatches,
-        modeB_skillMatches: matchResults.skillMatches,
-        insideCollegeMatches: matchResults.insideCollegeMatches,
-        outsideCollegeMatches: matchResults.outsideCollegeMatches,
+        modeA_knownPerson: knownPerson,
+        modeB_skillMatches: skillMatches,
+        insideCollegeMatches: insideCollege,
+        outsideCollegeMatches: outsideCollege,
         modeC_exchangeCycles: cycles,
       },
       summary: {
-        exactMatchesCount: matchResults.knownPersonMatches.length,
-        skillCandidatesCount: matchResults.skillMatches.length,
-        insideMatchesCount: matchResults.insideCollegeMatches.length,
-        outsideMatchesCount: matchResults.outsideCollegeMatches.length,
+        exactMatchesCount: knownPerson.length,
+        skillCandidatesCount: skillMatches.length,
+        insideMatchesCount: insideCollege.length,
+        outsideMatchesCount: outsideCollege.length,
         exchangeCyclesCount: cycles.length,
       }
     });
   } catch (err: any) {
     console.error('Search API Error:', err);
-    return NextResponse.json({ error: 'Search processing error occurred' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Search processing error occurred', 
+      details: err?.message || String(err) 
+    }, { status: 500 });
   }
 }

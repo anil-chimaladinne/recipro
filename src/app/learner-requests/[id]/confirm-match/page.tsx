@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +19,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-export default function ConfirmMatchPage() {
+function ConfirmMatchContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -256,5 +256,17 @@ export default function ConfirmMatchPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function ConfirmMatchPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <ConfirmMatchContent />
+    </Suspense>
   );
 }

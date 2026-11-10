@@ -6,9 +6,14 @@ import { notifyLearnersOfNewMentor } from '@/lib/skill-gap';
 import { evaluateActiveLearningRequests } from '@/lib/learning-requests';
 
 export async function GET() {
-  const db = getDb();
-  const skills = db.prepare('SELECT * FROM skills ORDER BY category, name').all();
-  return NextResponse.json({ skills });
+  try {
+    const db = getDb();
+    const skills = db.prepare('SELECT * FROM skills ORDER BY category, name').all();
+    return NextResponse.json({ skills });
+  } catch (err: any) {
+    console.error('Skills GET API Error:', err);
+    return NextResponse.json({ error: 'Failed to retrieve skills', details: err?.message || String(err) }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

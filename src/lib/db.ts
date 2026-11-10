@@ -1,27 +1,72 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure data directory exists
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const dbPath = process.env.DATABASE_URL
-  ? path.resolve(process.cwd(), process.env.DATABASE_URL)
-  : path.join(dataDir, 'skillswap.db');
-
-// Global cached instance for Next.js hot reloading
+// Global cached instance for Next.js hot reloading & serverless reuse
 let dbInstance: Database.Database | null = null;
+
+export function getDatabasePath(): { dataDir: string; dbPath: string; isServerless: boolean } {
+  const isServerless = Boolean(
+    process.env.VERCEL === '1' ||
+    process.env.VERCEL_ENV ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT ||
+    (process.env.NODE_ENV === 'production' && !fs.existsSync(path.join(process.cwd(), 'data')))
+  );
+
+  if (isServerless) {
+    return { dataDir: '/tmp', dbPath: path.join('/tmp', 'skillswap.db'), isServerless: true };
+  }
+
+  const envUrl = process.env.DATABASE_URL;
+  if (envUrl && !envUrl.includes('://')) {
+    const resolved = path.resolve(process.cwd(), envUrl);
+    const resolvedDir = path.dirname(resolved);
+    try {
+      if (!fs.existsSync(resolvedDir)) {
+        fs.mkdirSync(resolvedDir, { recursive: true });
+      }
+      return { dataDir: resolvedDir, dbPath: resolved, isServerless: false };
+    } catch {
+      return { dataDir: '/tmp', dbPath: path.join('/tmp', 'skillswap.db'), isServerless: true };
+    }
+  }
+
+  const dataDir = path.join(process.cwd(), 'data');
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    return { dataDir, dbPath: path.join(dataDir, 'skillswap.db'), isServerless: false };
+  } catch {
+    return { dataDir: '/tmp', dbPath: path.join('/tmp', 'skillswap.db'), isServerless: true };
+  }
+}
 
 export function getDb(): Database.Database {
   if (!dbInstance) {
+    const { dbPath, isServerless } = getDatabasePath();
     dbInstance = new Database(dbPath);
-    dbInstance.pragma('journal_mode = WAL');
+    if (!isServerless) {
+      dbInstance.pragma('journal_mode = WAL');
+    } else {
+      // In serverless /tmp, DELETE mode avoids -shm shared-memory file locks across lambda instances
+      dbInstance.pragma('journal_mode = DELETE');
+    }
     dbInstance.pragma('foreign_keys = ON');
     dbInstance.pragma('busy_timeout = 5000');
     initDatabase(dbInstance);
+
+    // Auto-seed initial catalog & demo personas if database was newly created (e.g. fresh /tmp)
+    try {
+      const skillsCount = (dbInstance.prepare('SELECT COUNT(*) as c FROM skills').get() as any)?.c || 0;
+      if (skillsCount === 0) {
+        seedInitialData(dbInstance);
+      }
+    } catch (seedErr) {
+      console.warn('Initial seeding check:', seedErr);
+    }
   }
   return dbInstance;
 }
@@ -851,6 +896,124 @@ export function syncSessionParticipants(db: Database.Database) {
     }
   } catch (err) {
     // Ignore sync error during initial table setup
+  }
+}
+
+export function seedInitialData(db: Database.Database) {
+  try {
+    const passwordHash = bcrypt.hashSync('Password123!', 10);
+
+    // 1. Skills Master Catalog
+    const skillsData = [
+      { id: 'skill-python', name: 'Python Programming', category: 'Computer Science', icon: 'Code', description: 'Core Python, scripting, data pipelines, and backend APIs' },
+      { id: 'skill-react', name: 'React & Next.js', category: 'Computer Science', icon: 'Layout', description: 'Component architecture, state management, hooks, and SSR' },
+      { id: 'skill-solidity', name: 'Solidity & Smart Contracts', category: 'Computer Science', icon: 'Cpu', description: 'EVM smart contract engineering, testing, and security' },
+      { id: 'skill-ml', name: 'Machine Learning & PyTorch', category: 'Computer Science', icon: 'Brain', description: 'Supervised/unsupervised ML, scikit-learn, deep learning basics' },
+      { id: 'skill-dsa', name: 'Data Structures & Algorithms', category: 'Computer Science', icon: 'Binary', description: 'Trees, graphs, dynamic programming, interview problem solving' },
+      { id: 'skill-figma', name: 'UI/UX Design & Figma', category: 'Design', icon: 'PenTool', description: 'Design systems, interactive prototyping, user research, wireframing' },
+      { id: 'skill-spanish', name: 'Spanish Conversation', category: 'Languages', icon: 'Languages', description: 'Conversational fluency, vocabulary, pronunciation, culture' },
+      { id: 'skill-calculus', name: 'Calculus & Linear Algebra', category: 'Mathematics', icon: 'Sigma', description: 'Derivatives, integrals, multivariable calculus, matrix algebra' },
+      { id: 'skill-finance', name: 'Corporate Finance & Valuation', category: 'Business', icon: 'TrendingUp', description: 'Financial modeling, DCF valuation, capital budgeting' },
+      { id: 'skill-node', name: 'Node.js & Express Backend', category: 'Computer Science', icon: 'Server', description: 'REST APIs, middleware, authentication, and database integration' },
+    ];
+
+    const insertSkill = db.prepare(`
+      INSERT OR IGNORE INTO skills (id, name, category, icon, description)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const s of skillsData) {
+      insertSkill.run(s.id, s.name, s.category, s.icon, s.description);
+    }
+
+    // 2. Student Personas
+    const students = [
+      { id: 'usr-rahul', email: 'rahul.reddy@campus.edu', role: 'STUDENT', name: 'Rahul Reddy', college: 'Andhra Institute of Technology', major: 'Computer Science & Software Systems', year: 'Senior', balance: 8, verified: 1, trust: 97, userType: 'TEACHER' },
+      { id: 'usr-saikiran', email: 'sai.kiran@campus.edu', role: 'STUDENT', name: 'Sai Kiran', college: 'Krishna Valley Engineering College', major: 'Computer Science & AI', year: 'Senior', balance: 6, verified: 1, trust: 96, userType: 'TEACHER_LEARNER' },
+      { id: 'usr-keerthana', email: 'keerthana.rao@campus.edu', role: 'STUDENT', name: 'Keerthana Rao', college: 'Krishna Valley Engineering College', major: 'Computer Science', year: 'Junior', balance: 4, verified: 1, trust: 92, userType: 'TEACHER_LEARNER' },
+      { id: 'usr-bhavya', email: 'bhavya.reddy@campus.edu', role: 'STUDENT', name: 'Bhavya Reddy', college: 'Coastal Andhra University', major: 'Digital Media & UI/UX', year: 'Senior', balance: 5, verified: 1, trust: 94, userType: 'TEACHER_LEARNER' },
+      { id: 'usr-ananya', email: 'ananya.reddy@campus.edu', role: 'STUDENT', name: 'Ananya Reddy', college: 'Godavari Institute of Computer Science', major: 'Data Science & Statistics', year: 'Sophomore', balance: 4, verified: 1, trust: 88, userType: 'LEARNER' },
+      { id: 'usr-vamsi', email: 'vamsi.krishna@campus.edu', role: 'STUDENT', name: 'Vamsi Krishna', college: 'Vijaya Engineering College', major: 'Applied Mathematics', year: 'Junior', balance: 3, verified: 1, trust: 90, userType: 'TEACHER_LEARNER' },
+      { id: 'usr-admin', email: 'admin@skillswap.campus.edu', role: 'ADMIN', name: 'Srinivas Rao (Campus Admin)', college: 'IT & Infrastructure Services', major: 'System Administration', year: 'Staff', balance: 100, verified: 1, trust: 100, userType: 'TEACHER_LEARNER' },
+      { id: 'usr-mod-sirisha', email: 'moderator.sirisha@campus.edu', role: 'MODERATOR', name: 'Sirisha (Campus Moderator)', college: 'Andhra Institute of Technology', major: 'Student Affairs', year: 'Graduate', balance: 10, verified: 1, trust: 99, userType: 'TEACHER_LEARNER' },
+    ];
+
+    const insertUser = db.prepare(`
+      INSERT OR IGNORE INTO users (id, email, password_hash, role, status, campus_id, user_type)
+      VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
+    `);
+
+    const insertProfile = db.prepare(`
+      INSERT OR IGNORE INTO profiles (id, user_id, display_name, college, major, year, is_verified_student, trust_score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertAccount = db.prepare(`
+      INSERT OR IGNORE INTO skill_credit_accounts (id, user_id, balance, escrow_balance)
+      VALUES (?, ?, ?, 0)
+    `);
+
+    const insertReputation = db.prepare(`
+      INSERT OR IGNORE INTO reputations (id, user_id, total_reviews, total_sessions_taught, total_sessions_learned, bayesian_rating, reliability_score)
+      VALUES (?, ?, 0, 0, 0, 4.5, 95.0)
+    `);
+
+    for (const s of students) {
+      insertUser.run(s.id, s.email, passwordHash, s.role, `STU-${s.id.toUpperCase()}`, s.userType);
+      insertProfile.run(`prof-${s.id}`, s.id, s.name, s.college, s.major, s.year, s.verified, s.trust);
+      insertAccount.run(`acc-${s.id}`, s.id, s.balance);
+      insertReputation.run(`rep-${s.id}`, s.id);
+    }
+
+    // 3. User Teaching Skills
+    const insertUserSkill = db.prepare(`
+      INSERT OR IGNORE INTO user_skills (id, user_id, skill_id, proficiency, experience_years, teaching_style, verification_status, assessment_score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertUserSkill.run('usk-rahul-python', 'usr-rahul', 'skill-python', 'Expert', 3.5, 'Hands-on architectural walkthroughs, debugging, and live coding', 'PLATFORM_VERIFIED', 95.0);
+    insertUserSkill.run('usk-saikiran-python', 'usr-saikiran', 'skill-python', 'Expert', 3.5, 'Deep dive architecture & debugging', 'PLATFORM_VERIFIED', 94.0);
+    insertUserSkill.run('usk-saikiran-solidity', 'usr-saikiran', 'skill-solidity', 'Advanced', 2.0, 'Smart contract security audits', 'PLATFORM_VERIFIED', 90.0);
+    insertUserSkill.run('usk-keerthana-react', 'usr-keerthana', 'skill-react', 'Advanced', 2.5, 'Hands-on project reviews', 'PLATFORM_VERIFIED', 91.0);
+    insertUserSkill.run('usk-keerthana-node', 'usr-keerthana', 'skill-node', 'Intermediate', 1.5, 'API building workshops', 'PEER_VERIFIED', 85.0);
+    insertUserSkill.run('usk-bhavya-figma', 'usr-bhavya', 'skill-figma', 'Expert', 4.0, 'Figma component mastery & prototypes', 'PLATFORM_VERIFIED', 96.0);
+    insertUserSkill.run('usk-vamsi-calculus', 'usr-vamsi', 'skill-calculus', 'Expert', 3.0, 'Step-by-step problem walkthroughs', 'PLATFORM_VERIFIED', 93.0);
+
+    // 4. Learning Goals
+    const insertGoal = db.prepare(`
+      INSERT OR IGNORE INTO learning_goals (id, user_id, skill_id, target_proficiency, priority, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    insertGoal.run('goal-ananya-python', 'usr-ananya', 'skill-python', 'Intermediate', 'HIGH', 'Need Python for data science coursework and statistical modeling');
+    insertGoal.run('goal-keerthana-solidity', 'usr-keerthana', 'skill-solidity', 'Intermediate', 'HIGH', 'Want to build DeFi and credential contracts for senior project');
+    insertGoal.run('goal-saikiran-figma', 'usr-saikiran', 'skill-figma', 'Intermediate', 'HIGH', 'Need better UI/UX skills for my open-source projects');
+    insertGoal.run('goal-bhavya-python', 'usr-bhavya', 'skill-python', 'Intermediate', 'HIGH', 'Need Python data scripts for UX analytics');
+
+    // 5. Availability Slots
+    const insertAvail = db.prepare(`
+      INSERT OR IGNORE INTO availability_slots (id, user_id, day_of_week, start_time, end_time)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    insertAvail.run('avail-rahul-mon', 'usr-rahul', 'Monday', '17:00', '20:00');
+    insertAvail.run('avail-rahul-wed', 'usr-rahul', 'Wednesday', '17:00', '20:00');
+    insertAvail.run('avail-rahul-fri', 'usr-rahul', 'Friday', '17:00', '20:00');
+    insertAvail.run('avail-saikiran-tue', 'usr-saikiran', 'Tuesday', '18:00', '21:00');
+    insertAvail.run('avail-saikiran-thu', 'usr-saikiran', 'Thursday', '18:00', '21:00');
+    insertAvail.run('avail-keerthana-tue', 'usr-keerthana', 'Tuesday', '18:00', '20:00');
+    insertAvail.run('avail-keerthana-thu', 'usr-keerthana', 'Thursday', '18:00', '20:00');
+    insertAvail.run('avail-bhavya-tue', 'usr-bhavya', 'Tuesday', '18:00', '20:00');
+    insertAvail.run('avail-vamsi-mon', 'usr-vamsi', 'Monday', '16:00', '19:00');
+
+    // 6. Verified Reputations
+    db.prepare(`UPDATE reputations SET total_reviews=32, total_sessions_taught=35, bayesian_rating=4.9, reliability_score=99 WHERE user_id='usr-rahul'`).run();
+    db.prepare(`UPDATE reputations SET total_reviews=24, total_sessions_taught=27, bayesian_rating=4.9, reliability_score=99 WHERE user_id='usr-saikiran'`).run();
+    db.prepare(`UPDATE reputations SET total_reviews=18, total_sessions_taught=19, bayesian_rating=4.9, reliability_score=97 WHERE user_id='usr-bhavya'`).run();
+    db.prepare(`UPDATE reputations SET total_reviews=7, total_sessions_taught=8, bayesian_rating=4.8, reliability_score=98 WHERE user_id='usr-keerthana'`).run();
+
+  } catch (err) {
+    console.warn('seedInitialData failed:', err);
   }
 }
 
