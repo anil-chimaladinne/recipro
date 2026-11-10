@@ -114,15 +114,15 @@ function ProfileContent() {
   const [checklistExpanded, setChecklistExpanded] = useState(false);
 
   useEffect(() => {
+    if (!user) return;
     fetchAvailability();
-    if (user) {
-      setTeachingPref(user.teaching_preference || 'Anyone');
-      setUserType(user.user_type || 'TEACHER_LEARNER');
-      setDailyLimit(user.daily_session_limit || 3);
-    }
+    setTeachingPref(user.teaching_preference || 'Anyone');
+    setUserType(user.user_type || 'TEACHER_LEARNER');
+    setDailyLimit(user.daily_session_limit || 3);
   }, [user]);
 
   const fetchAvailability = async () => {
+    if (!user) return;
     try {
       const res = await fetch('/api/availability');
       if (res.ok) {

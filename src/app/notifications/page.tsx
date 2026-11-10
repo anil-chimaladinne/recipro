@@ -49,6 +49,10 @@ export default function NotificationsInboxPage() {
   });
 
   const fetchNotifications = async (silent = false) => {
+    if (!user) {
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     try {
       const query = new URLSearchParams({
@@ -72,6 +76,7 @@ export default function NotificationsInboxPage() {
   };
 
   const fetchPreferences = async () => {
+    if (!user) return;
     try {
       const res = await fetch('/api/notifications/settings');
       if (res.ok) {
@@ -82,17 +87,19 @@ export default function NotificationsInboxPage() {
   };
 
   useEffect(() => {
+    if (!user) return;
     fetchNotifications();
     fetchPreferences();
-  }, [activeCategory, unreadOnly, page]);
+  }, [user, activeCategory, unreadOnly, page]);
 
-  // Live polling every 4s
+  // Live polling every 10s only if user is logged in
   useEffect(() => {
+    if (!user) return;
     const interval = setInterval(() => {
       fetchNotifications(true);
-    }, 4000);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [activeCategory, unreadOnly, page]);
+  }, [user, activeCategory, unreadOnly, page]);
 
   const markSingleAsRead = async (notificationId: string) => {
     try {
@@ -143,6 +150,28 @@ export default function NotificationsInboxPage() {
     if (type.startsWith('SECURITY_')) return <ShieldCheck className="w-4 h-4 text-rose-400" />;
     return <Bell className="w-4 h-4 text-cyan-400" />;
   };
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center space-y-6">
+        <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center mx-auto text-2xl font-bold border border-brand-500/30">
+          🔔
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-white mb-2">Sign in to view Notifications</h2>
+          <p className="text-xs text-slate-400">
+            Log in to see alerts for matched sessions, skill requests, and messages.
+          </p>
+        </div>
+        <Link
+          href="/login?redirect=/notifications"
+          className="inline-block px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-400 text-dark-bg font-bold text-xs shadow-glow-brand transition-colors"
+        >
+          Sign In Now
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-8 space-y-6">

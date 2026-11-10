@@ -24,20 +24,40 @@ export function Navbar() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    let isCancelled = false;
+    let interval: NodeJS.Timeout | null = null;
+
     const fetchUnread = async () => {
       try {
         const res = await fetch('/api/notifications/unread-count');
+        if (res.status === 401) {
+          // Token is unauthorized or expired - stop polling!
+          if (interval) clearInterval(interval);
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
-          setUnreadCount(data.unreadCount || 0);
+          if (!isCancelled) {
+            setUnreadCount(data.unreadCount || 0);
+          }
         }
-      } catch {}
+      } catch {
+        // Network error - stop interval to avoid spamming
+        if (interval) clearInterval(interval);
+      }
     };
 
     fetchUnread();
-    const interval = setInterval(fetchUnread, 4000);
-    return () => clearInterval(interval);
+    interval = setInterval(fetchUnread, 15000);
+    return () => {
+      isCancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, [user]);
 
   return (

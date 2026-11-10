@@ -25,6 +25,41 @@ function LoginComponent() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const DEMO_ACCOUNTS = [
+    { name: 'Rahul Reddy', role: 'Senior Mentor (Python)', email: 'rahul.reddy@campus.edu', icon: '👨‍🏫' },
+    { name: 'Sai Kiran', role: 'Mentor / Learner (AI & Web3)', email: 'sai.kiran@campus.edu', icon: '💻' },
+    { name: 'Ananya Reddy', role: 'Student Learner (Data Science)', email: 'ananya.reddy@campus.edu', icon: '👩‍🎓' },
+    { name: 'Srinivas Rao', role: 'Campus Admin', email: 'admin@skillswap.campus.edu', icon: '🛡️' },
+  ];
+
+  const handleQuickDemoLogin = async (demoEmail: string) => {
+    setEmail(demoEmail);
+    setPassword('Password123!');
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const success = await login(demoEmail, 'Password123!');
+      if (success) {
+        const meRes = await fetch('/api/auth/me');
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          const userRole = meData.user?.role || 'STUDENT';
+          if (userRole === 'ADMIN') {
+            router.push(searchParams.get('redirect') || '/admin');
+            return;
+          }
+        }
+        router.push(searchParams.get('redirect') || '/profile');
+      } else {
+        setErrorMsg('Invalid credentials. If using a custom account, please register first.');
+      }
+    } catch {
+      setErrorMsg('Network error logging in. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle Login Submission
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +200,39 @@ function LoginComponent() {
             )}
           </button>
         </form>
+
+        {/* 1-Click Demo Personas */}
+        <div className="pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-slate-300">Quick Demo Logins</span>
+            <span className="text-[10px] text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20 font-mono">
+              Pass: Password123!
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {DEMO_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickDemoLogin(acc.email)}
+                className="text-left p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-brand-500/40 transition-all group disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base shrink-0">{acc.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white group-hover:text-brand-300 truncate">
+                      {acc.name}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      {acc.role}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Create Account Link */}
         <div className="pt-4 border-t border-slate-800 text-center text-xs text-slate-400">

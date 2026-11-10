@@ -47,6 +47,10 @@ export default function WalletPage() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     fetchWalletData();
   }, [user]);
 

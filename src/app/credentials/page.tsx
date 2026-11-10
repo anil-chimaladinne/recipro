@@ -21,6 +21,10 @@ export default function CredentialsPage() {
   const [selectedCred, setSelectedCred] = useState<any | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     fetchCredentials();
   }, [user]);
 

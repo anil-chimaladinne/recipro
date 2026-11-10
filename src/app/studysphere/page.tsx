@@ -55,6 +55,10 @@ export default function StudySpherePage() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     fetchData();
   }, [user]);
 

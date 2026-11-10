@@ -66,6 +66,10 @@ function SessionsListContent() {
 
   // Fetch filtered sessions from backend
   const fetchSessions = async (silent = false) => {
+    if (!user) {
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     try {
       const query = new URLSearchParams();
@@ -98,16 +102,18 @@ function SessionsListContent() {
   };
 
   useEffect(() => {
+    if (!user) return;
     fetchSessions();
-  }, [roleFilter, statusFilter, skillFilter, modeFilter, dateFilter, dateFrom, dateTo, sortBy, page]);
+  }, [user, roleFilter, statusFilter, skillFilter, modeFilter, dateFilter, dateFrom, dateTo, sortBy, page]);
 
-  // Live polling (every 4 seconds)
+  // Live polling (every 10 seconds, only when user is logged in)
   useEffect(() => {
+    if (!user) return;
     const interval = setInterval(() => {
       fetchSessions(true);
-    }, 4000);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [roleFilter, statusFilter, skillFilter, modeFilter, dateFilter, dateFrom, dateTo, sortBy, page, searchTerm]);
+  }, [user, roleFilter, statusFilter, skillFilter, modeFilter, dateFilter, dateFrom, dateTo, sortBy, page, searchTerm]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,6 +154,28 @@ function SessionsListContent() {
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }
   };
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center space-y-6">
+        <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center mx-auto text-2xl font-bold border border-brand-500/30">
+          📅
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-white mb-2">Sign in to view your Sessions</h2>
+          <p className="text-xs text-slate-400">
+            Log in to access your scheduled teaching and learning exchanges.
+          </p>
+        </div>
+        <Link
+          href="/login?redirect=/sessions"
+          className="inline-block px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-400 text-dark-bg font-bold text-xs shadow-glow-brand transition-colors"
+        >
+          Sign In Now
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 lg:px-8 py-8 space-y-6">
